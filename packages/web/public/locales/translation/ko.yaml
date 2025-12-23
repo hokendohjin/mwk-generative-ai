@@ -7,7 +7,7 @@ agent_core:
 auth:
   loading: 로딩 중...
   login: 로그인
-  title: AWS 생성형 AI 사용 사례
+  title: MWK GenU on AWS
 chat:
   advanced_options: 고급 옵션
   create_link: 링크 생성

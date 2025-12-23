@@ -4,7 +4,7 @@ agent:
 auth:
   loading: Đang tải...
   login: Đăng nhập
-  title: Generative AI Use Cases on AWS
+  title: MWK GenU on AWS
 chat:
   advanced_options: Tùy chọn nâng cao
   create_link: Tạo liên kết

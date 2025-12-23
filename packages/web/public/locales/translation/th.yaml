@@ -4,7 +4,7 @@ agent:
 auth:
   loading: กำลังโหลด...
   login: เข้าสู่ระบบ
-  title: Generative AI Use Cases on AWS
+  title: MWK GenU on AWS
 chat:
   advanced_options: ตัวเลือกขั้นสูง
   create_link: สร้างลิงก์
