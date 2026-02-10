@@ -90,9 +90,9 @@ export const useWriter = () => {
       }
     }
 
-    // メッセージとトークン使用量を保存
+    // Save messages and record token usage
     try {
-      const { chatId } = await createChat();
+      const { chat } = await createChat();
       const toBeRecordedMessages: ToBeRecordedMessage[] = [
         {
           role: 'user',
@@ -110,7 +110,7 @@ export const useWriter = () => {
           metadata: lastMetadata,
         },
       ];
-      await createMessages(chatId, { messages: toBeRecordedMessages });
+      await createMessages(chat.chatId, { messages: toBeRecordedMessages });
     } catch (err) {
       console.error('Failed to save messages:', err);
     }

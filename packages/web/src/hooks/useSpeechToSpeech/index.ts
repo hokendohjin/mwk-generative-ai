@@ -5,10 +5,12 @@ import { AudioRecorder } from './AudioRecorder';
 import { v4 as uuid } from 'uuid';
 import useHttp from '../../hooks/useHttp';
 import useChatHistory from './useChatHistory';
+import useChatApi from '../useChatApi';
 import {
   SpeechToSpeechEventType,
   SpeechToSpeechEvent,
   Model,
+  ToBeRecordedMessage,
 } from 'generative-ai-use-cases';
 
 const NAMESPACE = import.meta.env.VITE_APP_SPEECH_TO_SPEECH_NAMESPACE!;
@@ -47,6 +49,7 @@ const base64ToFloat32Array = (base64String: string) => {
 
 export const useSpeechToSpeech = () => {
   const api = useHttp();
+  const { createChat, createMessages } = useChatApi();
   const {
     clear,
     messages,
@@ -59,11 +62,15 @@ export const useSpeechToSpeech = () => {
   const [isActive, setIsActive] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const systemPromptRef = useRef<string>('');
+  const modelRef = useRef<Model | null>(null);
   const audioPlayerRef = useRef<AudioPlayer | null>(null);
   const audioRecorderRef = useRef<AudioRecorder | null>(null);
   const channelRef = useRef<EventsChannel | null>(null);
   const audioInputQueue = useRef<string[]>([]);
   const [errorMessages, setErrorMessages] = useState<string[]>([]);
+  // Audio usage tracking
+  const audioInputSecondsRef = useRef<number>(0);
+  const audioOutputSecondsRef = useRef<number>(0);
 
   const resetState = () => {
     setIsLoading(false);
@@ -72,6 +79,9 @@ export const useSpeechToSpeech = () => {
     audioPlayerRef.current = null;
     channelRef.current = null;
     audioInputQueue.current = [];
+    audioInputSecondsRef.current = 0;
+    audioOutputSecondsRef.current = 0;
+    modelRef.current = null;
   };
 
   const dispatchEvent = async (
@@ -98,6 +108,8 @@ export const useSpeechToSpeech = () => {
       (audioData: Int16Array) => {
         const base64Data = arrayBufferToBase64(audioData.buffer);
         audioInputQueue.current.push(base64Data);
+        // Count audio input seconds (16kHz sample rate)
+        audioInputSecondsRef.current += audioData.length / 16000;
       }
     );
 
@@ -175,6 +187,8 @@ export const useSpeechToSpeech = () => {
               if (chunk) {
                 const audioData = base64ToFloat32Array(chunk);
                 audioPlayerRef.current.playAudio(audioData);
+                // Count audio output seconds (24kHz sample rate)
+                audioOutputSecondsRef.current += audioData.length / 24000;
               }
             }
           } else if (event.event === 'textStart') {
@@ -257,6 +271,9 @@ export const useSpeechToSpeech = () => {
     setIsLoading(true);
 
     systemPromptRef.current = systemPrompt;
+    modelRef.current = model;
+    audioInputSecondsRef.current = 0;
+    audioOutputSecondsRef.current = 0;
 
     await connectToAppSync(model);
     await initAudio();
@@ -264,6 +281,43 @@ export const useSpeechToSpeech = () => {
 
   const closeSession = async () => {
     await stopRecording();
+
+    // Save messages and record audio usage
+    try {
+      const conversationMessages = messages.filter((m) => m.role !== 'system');
+      if (conversationMessages.length > 0) {
+        const { chat } = await createChat();
+        const toBeRecordedMessages: ToBeRecordedMessage[] =
+          conversationMessages.map((m, i, arr) => ({
+            role: m.role,
+            content: m.content,
+            messageId: uuid(),
+            usecase: 'voice-chat',
+            llmType: modelRef.current?.modelId || 'amazon.nova-sonic-v1:0',
+            // Record audio seconds on the last assistant message
+            metadata:
+              m.role === 'assistant' && i === arr.length - 1
+                ? {
+                    usage: {
+                      inputTokens: 0,
+                      outputTokens: 0,
+                      totalTokens: 0,
+                    },
+                    audioInputSeconds: audioInputSecondsRef.current,
+                    audioOutputSeconds: audioOutputSecondsRef.current,
+                  }
+                : undefined,
+          }));
+        await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+      }
+    } catch (err) {
+      console.error('Failed to save voice chat messages:', err);
+    }
+
+    // Reset state
+    audioInputSecondsRef.current = 0;
+    audioOutputSecondsRef.current = 0;
+    modelRef.current = null;
 
     setIsActive(false);
     setIsLoading(false);

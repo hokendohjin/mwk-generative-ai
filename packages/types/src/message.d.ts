@@ -68,6 +68,9 @@ export type Metadata = {
     cacheReadInputTokens?: number;
     cacheWriteInputTokens?: number;
   };
+  // 音声チャット用フィールド
+  audioInputSeconds?: number;
+  audioOutputSeconds?: number;
 };
 
 export type UploadedFileType = {
