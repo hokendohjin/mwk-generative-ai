@@ -2,7 +2,13 @@ import { useState, useCallback } from 'react';
 import useChatApi from './useChatApi';
 import { MODELS } from './useModel';
 import { getPrompter } from '../prompts';
-import { UnrecordedMessage, Model } from 'generative-ai-use-cases';
+import {
+  UnrecordedMessage,
+  Model,
+  Metadata,
+  ToBeRecordedMessage,
+} from 'generative-ai-use-cases';
+import { v4 as uuidv4 } from 'uuid';
 
 export type MeetingMinutesStyle =
   | 'faq'
@@ -18,7 +24,7 @@ export const useMeetingMinutes = (
   setLastProcessedTranscript: (transcript: string) => void,
   setLastGeneratedTime: (time: Date | null) => void
 ) => {
-  const { predictStream } = useChatApi();
+  const { predictStream, createChat, createMessages } = useChatApi();
   const { modelIds: availableModels, textModels } = MODELS;
 
   // Only keep local state for temporary values
@@ -73,6 +79,7 @@ export const useMeetingMinutes = (
         });
 
         let fullResponse = '';
+        let lastMetadata: Metadata | undefined;
         setGeneratedMinutes('');
 
         for await (const chunk of stream) {
@@ -82,10 +89,16 @@ export const useMeetingMinutes = (
             for (const c of chunks) {
               if (c && c.length > 0) {
                 try {
-                  const payload = JSON.parse(c) as { text: string };
+                  const payload = JSON.parse(c) as {
+                    text: string;
+                    metadata?: Metadata;
+                  };
                   if (payload.text && payload.text.length > 0) {
                     fullResponse += payload.text;
                     setGeneratedMinutes(fullResponse);
+                  }
+                  if (payload.metadata) {
+                    lastMetadata = payload.metadata;
                   }
                 } catch (error) {
                   // Skip invalid JSON chunks
@@ -94,6 +107,31 @@ export const useMeetingMinutes = (
               }
             }
           }
+        }
+
+        // Save messages and record token usage
+        try {
+          const { chat } = await createChat();
+          const toBeRecordedMessages: ToBeRecordedMessage[] = [
+            {
+              role: 'user',
+              content: transcript,
+              messageId: uuidv4(),
+              usecase: 'meeting-minutes',
+              llmType: modelId,
+            },
+            {
+              role: 'assistant',
+              content: fullResponse,
+              messageId: uuidv4(),
+              usecase: 'meeting-minutes',
+              llmType: modelId,
+              metadata: lastMetadata,
+            },
+          ];
+          await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+        } catch (err) {
+          console.error('Failed to save messages:', err);
         }
 
         setLastProcessedTranscript(transcript);
@@ -111,6 +149,8 @@ export const useMeetingMinutes = (
       minutesStyle,
       customPrompt,
       predictStream,
+      createChat,
+      createMessages,
       textModels,
       autoGenerateSessionTimestamp,
       setGeneratedMinutes,
