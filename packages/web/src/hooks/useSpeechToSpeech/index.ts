@@ -292,7 +292,7 @@ export const useSpeechToSpeech = () => {
             role: m.role,
             content: m.content,
             messageId: uuid(),
-            usecase: 'voice-chat',
+            usecase: '/voice-chat',
             llmType: modelRef.current?.modelId || 'amazon.nova-sonic-v1:0',
             // Record audio seconds on the last assistant message
             metadata:
