@@ -24,7 +24,8 @@ export const useMeetingMinutes = (
   setLastProcessedTranscript: (transcript: string) => void,
   setLastGeneratedTime: (time: Date | null) => void
 ) => {
-  const { predictStream, createChat, createMessages } = useChatApi();
+  const { predictStream, createChat, createMessages, predictTitle } =
+    useChatApi();
   const { modelIds: availableModels, textModels } = MODELS;
 
   // Only keep local state for temporary values
@@ -130,6 +131,19 @@ export const useMeetingMinutes = (
             },
           ];
           await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+
+          // Generate title (fire-and-forget)
+          predictTitle({
+            model: model as Model,
+            chat,
+            prompt: prompter.setTitlePrompt({
+              messages: [
+                { role: 'user', content: transcript },
+                { role: 'assistant', content: fullResponse },
+              ],
+            }),
+            id: '/title',
+          }).catch(() => {});
         } catch (err) {
           console.error('Failed to save messages:', err);
         }
@@ -151,6 +165,7 @@ export const useMeetingMinutes = (
       predictStream,
       createChat,
       createMessages,
+      predictTitle,
       textModels,
       autoGenerateSessionTimestamp,
       setGeneratedMinutes,
