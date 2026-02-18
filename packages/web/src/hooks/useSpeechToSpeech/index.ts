@@ -6,6 +6,8 @@ import { v4 as uuid } from 'uuid';
 import useHttp from '../../hooks/useHttp';
 import useChatHistory from './useChatHistory';
 import useChatApi from '../useChatApi';
+import { findModelByModelId } from '../useModel';
+import { getPrompter } from '../../prompts';
 import {
   SpeechToSpeechEventType,
   SpeechToSpeechEvent,
@@ -49,7 +51,7 @@ const base64ToFloat32Array = (base64String: string) => {
 
 export const useSpeechToSpeech = () => {
   const api = useHttp();
-  const { createChat, createMessages } = useChatApi();
+  const { createChat, createMessages, predictTitle } = useChatApi();
   const {
     clear,
     messages,
@@ -292,7 +294,7 @@ export const useSpeechToSpeech = () => {
             role: m.role,
             content: m.content,
             messageId: uuid(),
-            usecase: 'voice-chat',
+            usecase: '/voice-chat',
             llmType: modelRef.current?.modelId || 'amazon.nova-sonic-v1:0',
             // Record audio seconds on the last assistant message
             metadata:
@@ -309,6 +311,25 @@ export const useSpeechToSpeech = () => {
                 : undefined,
           }));
         await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+
+        // Generate title (fire-and-forget)
+        const titleModelId =
+          modelRef.current?.modelId || 'amazon.nova-sonic-v1:0';
+        const titleModel = findModelByModelId(titleModelId);
+        if (titleModel) {
+          const prompter = getPrompter(titleModelId);
+          predictTitle({
+            model: titleModel,
+            chat,
+            prompt: prompter.setTitlePrompt({
+              messages: conversationMessages.map((m) => ({
+                role: m.role,
+                content: m.content,
+              })),
+            }),
+            id: '/title',
+          }).catch(() => {});
+        }
       }
     } catch (err) {
       console.error('Failed to save voice chat messages:', err);

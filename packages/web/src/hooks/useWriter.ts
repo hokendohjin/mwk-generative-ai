@@ -5,7 +5,8 @@ import {
 } from 'generative-ai-use-cases';
 import useChatApi from './useChatApi';
 import { create } from 'zustand';
-import { MODELS } from './useModel';
+import { MODELS, findModelByModelId } from './useModel';
+import { getPrompter } from '../prompts';
 import { generateWriterPrompt, WriterOption } from '../prompts/writer';
 import { v4 as uuidv4 } from 'uuid';
 
@@ -18,7 +19,8 @@ const useWriterState = create<{
 }));
 
 export const useWriter = () => {
-  const { predictStream, createChat, createMessages } = useChatApi();
+  const { predictStream, createChat, createMessages, predictTitle } =
+    useChatApi();
   const { modelId, setModelId } = useWriterState();
 
   const write = async function* (
@@ -98,19 +100,36 @@ export const useWriter = () => {
           role: 'user',
           content: prompt,
           messageId: uuidv4(),
-          usecase: 'writer',
+          usecase: '/writer',
           llmType: usedModelId,
         },
         {
           role: 'assistant',
           content: fullResponse,
           messageId: uuidv4(),
-          usecase: 'writer',
+          usecase: '/writer',
           llmType: usedModelId,
           metadata: lastMetadata,
         },
       ];
       await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+
+      // Generate title (fire-and-forget)
+      const titleModel = findModelByModelId(usedModelId);
+      if (titleModel) {
+        const prompter = getPrompter(usedModelId);
+        predictTitle({
+          model: titleModel,
+          chat,
+          prompt: prompter.setTitlePrompt({
+            messages: [
+              { role: 'user', content: prompt },
+              { role: 'assistant', content: fullResponse },
+            ],
+          }),
+          id: '/title',
+        }).catch(() => {});
+      }
     } catch (err) {
       console.error('Failed to save messages:', err);
     }
