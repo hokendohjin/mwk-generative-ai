@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { events, EventsChannel } from 'aws-amplify/data';
 import { AudioPlayer } from './AudioPlayer';
 import { AudioRecorder } from './AudioRecorder';
@@ -73,6 +73,13 @@ export const useSpeechToSpeech = () => {
   // Audio usage tracking
   const audioInputSecondsRef = useRef<number>(0);
   const audioOutputSecondsRef = useRef<number>(0);
+  // Guard against duplicate closeSession calls (e.g. stop button + backend 'end' event)
+  const isClosingRef = useRef(false);
+  // Track messages via ref to avoid stale closure in AppSync subscription callbacks
+  const messagesRef = useRef(messages);
+  useEffect(() => {
+    messagesRef.current = messages;
+  }, [messages]);
 
   const resetState = () => {
     setIsLoading(false);
@@ -84,6 +91,7 @@ export const useSpeechToSpeech = () => {
     audioInputSecondsRef.current = 0;
     audioOutputSecondsRef.current = 0;
     modelRef.current = null;
+    isClosingRef.current = false;
   };
 
   const dispatchEvent = async (
@@ -282,11 +290,24 @@ export const useSpeechToSpeech = () => {
   };
 
   const closeSession = async () => {
+    if (isClosingRef.current) return;
+    isClosingRef.current = true;
+
     await stopRecording();
+
+    // Disconnect AppSync channel after stopRecording to ensure 'audioStop'
+    // is dispatched, but before DB save to prevent backend 'end' event
+    // from triggering a duplicate closeSession call
+    if (channelRef.current) {
+      channelRef.current.close();
+      channelRef.current = null;
+    }
 
     // Save messages and record audio usage
     try {
-      const conversationMessages = messages.filter((m) => m.role !== 'system');
+      const conversationMessages = messagesRef.current.filter(
+        (m) => m.role !== 'system'
+      );
       if (conversationMessages.length > 0) {
         const { chat } = await createChat();
         const toBeRecordedMessages: ToBeRecordedMessage[] =
@@ -335,7 +356,8 @@ export const useSpeechToSpeech = () => {
       console.error('Failed to save voice chat messages:', err);
     }
 
-    // Reset state
+    // Reset state (isClosingRef is intentionally NOT reset here;
+    // it is only reset in resetState() when starting a new session)
     audioInputSecondsRef.current = 0;
     audioOutputSecondsRef.current = 0;
     modelRef.current = null;

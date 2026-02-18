@@ -180,6 +180,7 @@ export const findModelByModelId = (modelId: string) => {
     ...imageGenModels,
     ...videoGenModels,
     ...agentModels,
+    ...speechToSpeechModels,
   ].find((m) => m.modelId === modelId);
 
   if (model) {
