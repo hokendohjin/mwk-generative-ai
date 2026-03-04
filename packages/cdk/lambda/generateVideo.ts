@@ -2,7 +2,7 @@ import { APIGatewayProxyEvent, APIGatewayProxyResult } from 'aws-lambda';
 import { GenerateVideoRequest } from 'generative-ai-use-cases';
 import api from './utils/api';
 import { defaultVideoGenerationModel } from './utils/models';
-import { createJob } from './repositoryVideoJob';
+import { createJob, updateVideoUsage } from './repositoryVideoJob';
 
 export const handler = async (
   event: APIGatewayProxyEvent
@@ -18,6 +18,9 @@ export const handler = async (
     );
 
     const res = await createJob(userId, invocationArn, req);
+
+    // Record video generation usage to StatsTable
+    await updateVideoUsage(userId, model.modelId);
 
     return {
       statusCode: 200,
