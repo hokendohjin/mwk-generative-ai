@@ -119,6 +119,7 @@ export const useMeetingMinutes = (
         // If existing text was present, update only after completion
         if (hasExisting) {
           setGeneratedMinutes(fullResponse);
+        }
         // Save messages and record token usage
         try {
           const { chat } = await createChat();
