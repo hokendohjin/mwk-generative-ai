@@ -2,7 +2,13 @@ import { useState, useCallback } from 'react';
 import useChatApi from './useChatApi';
 import { MODELS } from './useModel';
 import { getPrompter, MeetingMinutesParams, DiagramOption } from '../prompts';
-import { UnrecordedMessage, Model } from 'generative-ai-use-cases';
+import {
+  UnrecordedMessage,
+  Model,
+  Metadata,
+  ToBeRecordedMessage,
+} from 'generative-ai-use-cases';
+import { v4 as uuidv4 } from 'uuid';
 
 export const useMeetingMinutes = (
   minutesStyle: MeetingMinutesParams['style'],
@@ -13,7 +19,8 @@ export const useMeetingMinutes = (
   setLastGeneratedTime: (time: Date | null) => void,
   diagramOptions?: DiagramOption[]
 ) => {
-  const { predictStream } = useChatApi();
+  const { predictStream, createChat, createMessages, predictTitle } =
+    useChatApi();
   const { modelIds: availableModels, textModels } = MODELS;
 
   // Only keep local state for temporary values
@@ -71,8 +78,9 @@ export const useMeetingMinutes = (
         });
 
         let fullResponse = '';
-        const hasExisting = existingMinutes && existingMinutes.trim() !== '';
 
+        const hasExisting = existingMinutes && existingMinutes.trim() !== '';
+        let lastMetadata: Metadata | undefined;
         // Only clear if no existing text (first generation)
         if (!hasExisting) {
           setGeneratedMinutes('');
@@ -85,13 +93,19 @@ export const useMeetingMinutes = (
             for (const c of chunks) {
               if (c && c.length > 0) {
                 try {
-                  const payload = JSON.parse(c) as { text: string };
+                  const payload = JSON.parse(c) as {
+                    text: string;
+                    metadata?: Metadata;
+                  };
                   if (payload.text && payload.text.length > 0) {
                     fullResponse += payload.text;
                     // Only update during streaming if no existing text
                     if (!hasExisting) {
                       setGeneratedMinutes(fullResponse);
                     }
+                  }
+                  if (payload.metadata) {
+                    lastMetadata = payload.metadata;
                   }
                 } catch (error) {
                   // Skip invalid JSON chunks
@@ -105,6 +119,42 @@ export const useMeetingMinutes = (
         // If existing text was present, update only after completion
         if (hasExisting) {
           setGeneratedMinutes(fullResponse);
+        // Save messages and record token usage
+        try {
+          const { chat } = await createChat();
+          const toBeRecordedMessages: ToBeRecordedMessage[] = [
+            {
+              role: 'user',
+              content: transcript,
+              messageId: uuidv4(),
+              usecase: '/meeting-minutes',
+              llmType: modelId,
+            },
+            {
+              role: 'assistant',
+              content: fullResponse,
+              messageId: uuidv4(),
+              usecase: '/meeting-minutes',
+              llmType: modelId,
+              metadata: lastMetadata,
+            },
+          ];
+          await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+
+          // Generate title (fire-and-forget)
+          predictTitle({
+            model: model as Model,
+            chat,
+            prompt: prompter.setTitlePrompt({
+              messages: [
+                { role: 'user', content: transcript },
+                { role: 'assistant', content: fullResponse },
+              ],
+            }),
+            id: '/title',
+          }).catch(() => {});
+        } catch (err) {
+          console.error('Failed to save messages:', err);
         }
 
         setLastProcessedTranscript(transcript);
@@ -123,6 +173,9 @@ export const useMeetingMinutes = (
       customPrompt,
       diagramOptions,
       predictStream,
+      createChat,
+      createMessages,
+      predictTitle,
       textModels,
       autoGenerateSessionTimestamp,
       setGeneratedMinutes,

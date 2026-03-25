@@ -207,7 +207,11 @@ export const listMessages = async (
 
 // Update token usage
 async function updateTokenUsage(message: RecordedMessage): Promise<void> {
-  if (!message.metadata?.usage) {
+  // Skip if neither usage nor audio seconds exist
+  if (
+    !message.metadata?.usage &&
+    message.metadata?.audioInputSeconds === undefined
+  ) {
     return;
   }
 
@@ -223,6 +227,9 @@ async function updateTokenUsage(message: RecordedMessage): Promise<void> {
     cacheReadInputTokens: 0,
     cacheWriteInputTokens: 0,
   };
+  // Audio seconds (for voice chat)
+  const audioInputSeconds = message.metadata?.audioInputSeconds || 0;
+  const audioOutputSeconds = message.metadata?.audioOutputSeconds || 0;
 
   try {
     // Try to update with shallow nesting structure
@@ -250,7 +257,13 @@ async function updateTokenUsage(message: RecordedMessage): Promise<void> {
             cacheReadInputTokens.#usecaseKey = if_not_exists(cacheReadInputTokens.#usecaseKey, :zero) + :cacheReadInputTokens,
             cacheWriteInputTokens.#overall = if_not_exists(cacheWriteInputTokens.#overall, :zero) + :cacheWriteInputTokens,
             cacheWriteInputTokens.#modelKey = if_not_exists(cacheWriteInputTokens.#modelKey, :zero) + :cacheWriteInputTokens,
-            cacheWriteInputTokens.#usecaseKey = if_not_exists(cacheWriteInputTokens.#usecaseKey, :zero) + :cacheWriteInputTokens
+            cacheWriteInputTokens.#usecaseKey = if_not_exists(cacheWriteInputTokens.#usecaseKey, :zero) + :cacheWriteInputTokens,
+            audioInputSeconds.#overall = if_not_exists(audioInputSeconds.#overall, :zero) + :audioInputSeconds,
+            audioInputSeconds.#modelKey = if_not_exists(audioInputSeconds.#modelKey, :zero) + :audioInputSeconds,
+            audioInputSeconds.#usecaseKey = if_not_exists(audioInputSeconds.#usecaseKey, :zero) + :audioInputSeconds,
+            audioOutputSeconds.#overall = if_not_exists(audioOutputSeconds.#overall, :zero) + :audioOutputSeconds,
+            audioOutputSeconds.#modelKey = if_not_exists(audioOutputSeconds.#modelKey, :zero) + :audioOutputSeconds,
+            audioOutputSeconds.#usecaseKey = if_not_exists(audioOutputSeconds.#usecaseKey, :zero) + :audioOutputSeconds
         `,
         ExpressionAttributeNames: {
           '#date': 'date',
@@ -266,6 +279,8 @@ async function updateTokenUsage(message: RecordedMessage): Promise<void> {
           ':outputTokens': usage.outputTokens || 0,
           ':cacheReadInputTokens': usage.cacheReadInputTokens || 0,
           ':cacheWriteInputTokens': usage.cacheWriteInputTokens || 0,
+          ':audioInputSeconds': audioInputSeconds,
+          ':audioOutputSeconds': audioOutputSeconds,
         },
       })
     );
@@ -290,7 +305,9 @@ async function updateTokenUsage(message: RecordedMessage): Promise<void> {
                 inputTokens = :inputTokensObj,
                 outputTokens = :outputTokensObj,
                 cacheReadInputTokens = :cacheReadInputTokensObj,
-                cacheWriteInputTokens = :cacheWriteInputTokensObj
+                cacheWriteInputTokens = :cacheWriteInputTokensObj,
+                audioInputSeconds = :audioInputSecondsObj,
+                audioOutputSeconds = :audioOutputSecondsObj
             `,
           ExpressionAttributeNames: {
             '#date': 'date',
@@ -321,6 +338,16 @@ async function updateTokenUsage(message: RecordedMessage): Promise<void> {
               overall: usage.cacheWriteInputTokens || 0,
               [`model#${modelId}`]: usage.cacheWriteInputTokens || 0,
               [`usecase#${usecase}`]: usage.cacheWriteInputTokens || 0,
+            },
+            ':audioInputSecondsObj': {
+              overall: audioInputSeconds,
+              [`model#${modelId}`]: audioInputSeconds,
+              [`usecase#${usecase}`]: audioInputSeconds,
+            },
+            ':audioOutputSecondsObj': {
+              overall: audioOutputSeconds,
+              [`model#${modelId}`]: audioOutputSeconds,
+              [`usecase#${usecase}`]: audioOutputSeconds,
             },
           },
         })

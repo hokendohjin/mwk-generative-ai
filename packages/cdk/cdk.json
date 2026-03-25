@@ -34,7 +34,7 @@
     "embeddingModelId": "amazon.titan-embed-text-v2:0",
     "rerankingModelId": null,
     "queryDecompositionEnabled": false,
-    "selfSignUpEnabled": true,
+    "selfSignUpEnabled": false,
     "allowedSignUpEmailDomains": null,
     "samlAuthEnabled": false,
     "samlCognitoDomainName": "",
@@ -51,8 +51,7 @@
       "us.amazon.nova-premier-v1:0",
       "us.amazon.nova-pro-v1:0",
       "us.amazon.nova-lite-v1:0",
-      "us.amazon.nova-micro-v1:0",
-      "us.deepseek.r1-v1:0"
+      "us.amazon.nova-micro-v1:0"
     ],
     "imageGenerationModelIds": ["amazon.nova-canvas-v1:0"],
     "videoGenerationModelIds": ["amazon.nova-reel-v1:0"],

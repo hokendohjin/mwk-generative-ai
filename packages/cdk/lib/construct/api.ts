@@ -307,6 +307,7 @@ export class Api extends Construct {
         CROSS_ACCOUNT_BEDROCK_ROLE_ARN: crossAccountBedrockRoleArn ?? '',
         BUCKET_NAME: fileBucket.bucketName,
         TABLE_NAME: table.tableName,
+        STATS_TABLE_NAME: props.statsTable.tableName,
       },
       bundling: {
         nodeModules: ['@aws-sdk/client-bedrock-runtime'],
@@ -328,6 +329,7 @@ export class Api extends Construct {
       );
     }
     table.grantWriteData(generateVideoFunction);
+    props.statsTable.grantReadWriteData(generateVideoFunction);
 
     const copyVideoJob = new NodejsFunction(this, 'CopyVideoJob', {
       runtime: LAMBDA_RUNTIME_NODEJS,

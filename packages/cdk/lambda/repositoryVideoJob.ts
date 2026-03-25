@@ -25,6 +25,7 @@ import { initBedrockRuntimeClient } from './utils/bedrockClient';
 
 const BUCKET_NAME: string = process.env.BUCKET_NAME!;
 const TABLE_NAME: string = process.env.TABLE_NAME!;
+const STATS_TABLE_NAME: string = process.env.STATS_TABLE_NAME || '';
 const COPY_VIDEO_JOB_FUNCTION_ARN = process.env.COPY_VIDEO_JOB_FUNCTION_ARN!;
 const dynamoDb = new DynamoDBClient({});
 const dynamoDbDocument = DynamoDBDocumentClient.from(dynamoDb);
@@ -197,4 +198,110 @@ export const deleteVideoJob = async (
       },
     })
   );
+};
+
+export const updateVideoUsage = async (
+  userId: string,
+  modelId: string
+): Promise<void> => {
+  if (!STATS_TABLE_NAME) {
+    return;
+  }
+
+  const dateStr = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+  const usecase = '/video';
+
+  try {
+    await dynamoDbDocument.send(
+      new UpdateCommand({
+        TableName: STATS_TABLE_NAME,
+        Key: {
+          id: `stats#${dateStr}`,
+          userId: userId,
+        },
+        UpdateExpression: `
+          SET
+            #date = :date,
+            executions.#overall = if_not_exists(executions.#overall, :zero) + :one,
+            executions.#modelKey = if_not_exists(executions.#modelKey, :zero) + :one,
+            executions.#usecaseKey = if_not_exists(executions.#usecaseKey, :zero) + :one,
+            inputTokens.#overall = if_not_exists(inputTokens.#overall, :zero) + :zero,
+            inputTokens.#modelKey = if_not_exists(inputTokens.#modelKey, :zero) + :zero,
+            inputTokens.#usecaseKey = if_not_exists(inputTokens.#usecaseKey, :zero) + :zero,
+            outputTokens.#overall = if_not_exists(outputTokens.#overall, :zero) + :zero,
+            outputTokens.#modelKey = if_not_exists(outputTokens.#modelKey, :zero) + :zero,
+            outputTokens.#usecaseKey = if_not_exists(outputTokens.#usecaseKey, :zero) + :zero,
+            cacheReadInputTokens.#overall = if_not_exists(cacheReadInputTokens.#overall, :zero) + :zero,
+            cacheReadInputTokens.#modelKey = if_not_exists(cacheReadInputTokens.#modelKey, :zero) + :zero,
+            cacheReadInputTokens.#usecaseKey = if_not_exists(cacheReadInputTokens.#usecaseKey, :zero) + :zero,
+            cacheWriteInputTokens.#overall = if_not_exists(cacheWriteInputTokens.#overall, :zero) + :zero,
+            cacheWriteInputTokens.#modelKey = if_not_exists(cacheWriteInputTokens.#modelKey, :zero) + :zero,
+            cacheWriteInputTokens.#usecaseKey = if_not_exists(cacheWriteInputTokens.#usecaseKey, :zero) + :zero,
+            audioInputSeconds.#overall = if_not_exists(audioInputSeconds.#overall, :zero) + :zero,
+            audioInputSeconds.#modelKey = if_not_exists(audioInputSeconds.#modelKey, :zero) + :zero,
+            audioInputSeconds.#usecaseKey = if_not_exists(audioInputSeconds.#usecaseKey, :zero) + :zero,
+            audioOutputSeconds.#overall = if_not_exists(audioOutputSeconds.#overall, :zero) + :zero,
+            audioOutputSeconds.#modelKey = if_not_exists(audioOutputSeconds.#modelKey, :zero) + :zero,
+            audioOutputSeconds.#usecaseKey = if_not_exists(audioOutputSeconds.#usecaseKey, :zero) + :zero
+        `,
+        ExpressionAttributeNames: {
+          '#date': 'date',
+          '#overall': 'overall',
+          '#modelKey': `model#${modelId}`,
+          '#usecaseKey': `usecase#${usecase}`,
+        },
+        ExpressionAttributeValues: {
+          ':date': dateStr,
+          ':zero': 0,
+          ':one': 1,
+        },
+      })
+    );
+  } catch (updateError) {
+    console.log(
+      'Record does not exist, creating initial structure:',
+      updateError
+    );
+    try {
+      const zeroObj = {
+        overall: 0,
+        [`model#${modelId}`]: 0,
+        [`usecase#${usecase}`]: 0,
+      };
+      await dynamoDbDocument.send(
+        new UpdateCommand({
+          TableName: STATS_TABLE_NAME,
+          Key: {
+            id: `stats#${dateStr}`,
+            userId: userId,
+          },
+          UpdateExpression: `
+              SET
+                #date = :date,
+                executions = :executionsObj,
+                inputTokens = :zeroObj,
+                outputTokens = :zeroObj,
+                cacheReadInputTokens = :zeroObj,
+                cacheWriteInputTokens = :zeroObj,
+                audioInputSeconds = :zeroObj,
+                audioOutputSeconds = :zeroObj
+          `,
+          ExpressionAttributeNames: {
+            '#date': 'date',
+          },
+          ExpressionAttributeValues: {
+            ':date': dateStr,
+            ':executionsObj': {
+              overall: 1,
+              [`model#${modelId}`]: 1,
+              [`usecase#${usecase}`]: 1,
+            },
+            ':zeroObj': zeroObj,
+          },
+        })
+      );
+    } catch (putError) {
+      console.error('Error creating video usage:', putError);
+    }
+  }
 };
