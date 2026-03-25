@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import useChatApi from './useChatApi';
 import { MODELS } from './useModel';
-import { getPrompter } from '../prompts';
+import { getPrompter, MeetingMinutesParams, DiagramOption } from '../prompts';
 import {
   UnrecordedMessage,
   Model,
@@ -10,19 +10,14 @@ import {
 } from 'generative-ai-use-cases';
 import { v4 as uuidv4 } from 'uuid';
 
-export type MeetingMinutesStyle =
-  | 'faq'
-  | 'newspaper'
-  | 'transcription'
-  | 'custom';
-
 export const useMeetingMinutes = (
-  minutesStyle: MeetingMinutesStyle,
+  minutesStyle: MeetingMinutesParams['style'],
   customPrompt: string,
   autoGenerateSessionTimestamp: number | null,
   setGeneratedMinutes: (minutes: string) => void,
   setLastProcessedTranscript: (transcript: string) => void,
-  setLastGeneratedTime: (time: Date | null) => void
+  setLastGeneratedTime: (time: Date | null) => void,
+  diagramOptions?: DiagramOption[]
 ) => {
   const { predictStream, createChat, createMessages, predictTitle } =
     useChatApi();
@@ -38,7 +33,8 @@ export const useMeetingMinutes = (
       onGenerate?: (
         status: 'generating' | 'success' | 'error',
         data?: { message?: string; minutes?: string }
-      ) => void
+      ) => void,
+      existingMinutes?: string
     ) => {
       if (!transcript || transcript.trim() === '') return;
 
@@ -54,12 +50,14 @@ export const useMeetingMinutes = (
       try {
         const prompter = getPrompter(modelId);
 
+        const isSavedPrompt = minutesStyle.startsWith('savedPrompt:');
         const promptContent =
-          minutesStyle === 'custom' && customPrompt
+          (minutesStyle === 'custom' || isSavedPrompt) && customPrompt
             ? customPrompt
             : prompter.meetingMinutesPrompt({
                 style: minutesStyle,
                 customPrompt,
+                diagramOptions,
               });
 
         const messages: UnrecordedMessage[] = [
@@ -80,8 +78,13 @@ export const useMeetingMinutes = (
         });
 
         let fullResponse = '';
+
+        const hasExisting = existingMinutes && existingMinutes.trim() !== '';
         let lastMetadata: Metadata | undefined;
-        setGeneratedMinutes('');
+        // Only clear if no existing text (first generation)
+        if (!hasExisting) {
+          setGeneratedMinutes('');
+        }
 
         for await (const chunk of stream) {
           if (chunk) {
@@ -96,7 +99,10 @@ export const useMeetingMinutes = (
                   };
                   if (payload.text && payload.text.length > 0) {
                     fullResponse += payload.text;
-                    setGeneratedMinutes(fullResponse);
+                    // Only update during streaming if no existing text
+                    if (!hasExisting) {
+                      setGeneratedMinutes(fullResponse);
+                    }
                   }
                   if (payload.metadata) {
                     lastMetadata = payload.metadata;
@@ -110,6 +116,9 @@ export const useMeetingMinutes = (
           }
         }
 
+        // If existing text was present, update only after completion
+        if (hasExisting) {
+          setGeneratedMinutes(fullResponse);
         // Save messages and record token usage
         try {
           const { chat } = await createChat();
@@ -162,6 +171,7 @@ export const useMeetingMinutes = (
     [
       minutesStyle,
       customPrompt,
+      diagramOptions,
       predictStream,
       createChat,
       createMessages,
