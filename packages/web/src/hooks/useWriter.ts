@@ -1,8 +1,14 @@
-import { StreamingChunk } from 'generative-ai-use-cases';
+import {
+  StreamingChunk,
+  Metadata,
+  ToBeRecordedMessage,
+} from 'generative-ai-use-cases';
 import useChatApi from './useChatApi';
 import { create } from 'zustand';
-import { MODELS } from './useModel';
+import { MODELS, findModelByModelId } from './useModel';
+import { getPrompter } from '../prompts';
 import { generateWriterPrompt, WriterOption } from '../prompts/writer';
+import { v4 as uuidv4 } from 'uuid';
 
 const useWriterState = create<{
   modelId: string;
@@ -13,7 +19,8 @@ const useWriterState = create<{
 }));
 
 export const useWriter = () => {
-  const { predictStream } = useChatApi();
+  const { predictStream, createChat, createMessages, predictTitle } =
+    useChatApi();
   const { modelId, setModelId } = useWriterState();
 
   const write = async function* (
@@ -27,6 +34,8 @@ export const useWriter = () => {
       command
     );
 
+    const usedModelId = overrideModel?.modelId || modelId;
+
     const stream = await predictStream({
       id: '1',
       messages,
@@ -37,6 +46,9 @@ export const useWriter = () => {
     });
     let tmpChunk = '';
     let tmpTrace = '';
+    let fullResponse = '';
+    let lastMetadata: Metadata | undefined;
+
     for await (const chunk of stream) {
       const chunks = (chunk as string).split('\n');
 
@@ -46,10 +58,15 @@ export const useWriter = () => {
 
           if (payload.text.length > 0) {
             tmpChunk += payload.text;
+            fullResponse += payload.text;
           }
 
           if (payload.trace) {
             tmpTrace += payload.trace;
+          }
+
+          if (payload.metadata) {
+            lastMetadata = payload.metadata;
           }
         }
 
@@ -73,6 +90,48 @@ export const useWriter = () => {
         yield { trace: tmpTrace };
         tmpTrace = '';
       }
+    }
+
+    // Save messages and record token usage
+    try {
+      const { chat } = await createChat();
+      const toBeRecordedMessages: ToBeRecordedMessage[] = [
+        {
+          role: 'user',
+          content: prompt,
+          messageId: uuidv4(),
+          usecase: '/writer',
+          llmType: usedModelId,
+        },
+        {
+          role: 'assistant',
+          content: fullResponse,
+          messageId: uuidv4(),
+          usecase: '/writer',
+          llmType: usedModelId,
+          metadata: lastMetadata,
+        },
+      ];
+      await createMessages(chat.chatId, { messages: toBeRecordedMessages });
+
+      // Generate title (fire-and-forget)
+      const titleModel = findModelByModelId(usedModelId);
+      if (titleModel) {
+        const prompter = getPrompter(usedModelId);
+        predictTitle({
+          model: titleModel,
+          chat,
+          prompt: prompter.setTitlePrompt({
+            messages: [
+              { role: 'user', content: prompt },
+              { role: 'assistant', content: fullResponse },
+            ],
+          }),
+          id: '/title',
+        }).catch(() => {});
+      }
+    } catch (err) {
+      console.error('Failed to save messages:', err);
     }
   };
 

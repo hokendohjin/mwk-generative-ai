@@ -402,6 +402,88 @@ export class Api extends Construct {
     });
     invokeFlowFunction.grantInvoke(idPool.authenticatedRole);
 
+    const predictTitleFunction = new NodejsFunction(this, 'PredictTitle', {
+      runtime: LAMBDA_RUNTIME_NODEJS,
+      entry: './lambda/predictTitle.ts',
+      timeout: Duration.minutes(15),
+      bundling: {
+        nodeModules: ['@aws-sdk/client-bedrock-runtime'],
+      },
+      environment: {
+        TABLE_NAME: table.tableName,
+        MODEL_REGION: modelRegion,
+        MODEL_IDS: JSON.stringify(modelIds),
+        IMAGE_GENERATION_MODEL_IDS: JSON.stringify(imageGenerationModelIds),
+        VIDEO_GENERATION_MODEL_IDS: JSON.stringify(videoGenerationModelIds),
+        CROSS_ACCOUNT_BEDROCK_ROLE_ARN: crossAccountBedrockRoleArn ?? '',
+        ...(props.guardrailIdentify
+          ? { GUARDRAIL_IDENTIFIER: props.guardrailIdentify }
+          : {}),
+        ...(props.guardrailVersion
+          ? { GUARDRAIL_VERSION: props.guardrailVersion }
+          : {}),
+      },
+      vpc,
+      securityGroups,
+    });
+    table.grantWriteData(predictTitleFunction);
+
+    const generateImageFunction = new NodejsFunction(this, 'GenerateImage', {
+      runtime: LAMBDA_RUNTIME_NODEJS,
+      entry: './lambda/generateImage.ts',
+      timeout: Duration.minutes(15),
+      environment: {
+        MODEL_REGION: modelRegion,
+        MODEL_IDS: JSON.stringify(modelIds),
+        IMAGE_GENERATION_MODEL_IDS: JSON.stringify(imageGenerationModelIds),
+        VIDEO_GENERATION_MODEL_IDS: JSON.stringify(videoGenerationModelIds),
+        CROSS_ACCOUNT_BEDROCK_ROLE_ARN: crossAccountBedrockRoleArn ?? '',
+      },
+      bundling: {
+        nodeModules: ['@aws-sdk/client-bedrock-runtime'],
+      },
+      vpc,
+      securityGroups,
+    });
+
+    const generateVideoFunction = new NodejsFunction(this, 'GenerateVideo', {
+      runtime: LAMBDA_RUNTIME_NODEJS,
+      entry: './lambda/generateVideo.ts',
+      timeout: Duration.minutes(15),
+      environment: {
+        MODEL_REGION: modelRegion,
+        MODEL_IDS: JSON.stringify(modelIds),
+        IMAGE_GENERATION_MODEL_IDS: JSON.stringify(imageGenerationModelIds),
+        VIDEO_GENERATION_MODEL_IDS: JSON.stringify(videoGenerationModelIds),
+        VIDEO_BUCKET_OWNER: Stack.of(this).account,
+        VIDEO_BUCKET_REGION_MAP: JSON.stringify(props.videoBucketRegionMap),
+        CROSS_ACCOUNT_BEDROCK_ROLE_ARN: crossAccountBedrockRoleArn ?? '',
+        BUCKET_NAME: fileBucket.bucketName,
+        TABLE_NAME: table.tableName,
+        STATS_TABLE_NAME: props.statsTable.tableName,
+      },
+      bundling: {
+        nodeModules: ['@aws-sdk/client-bedrock-runtime'],
+      },
+      vpc,
+      securityGroups,
+    });
+    for (const region of Object.keys(props.videoBucketRegionMap)) {
+      const bucketName = props.videoBucketRegionMap[region];
+      generateVideoFunction.role?.addToPrincipalPolicy(
+        new PolicyStatement({
+          effect: Effect.ALLOW,
+          actions: ['s3:PutObject'],
+          resources: [
+            `arn:aws:s3:::${bucketName}`,
+            `arn:aws:s3:::${bucketName}/*`,
+          ],
+        })
+      );
+    }
+    table.grantWriteData(generateVideoFunction);
+    props.statsTable.grantReadWriteData(generateVideoFunction);
+
     const copyVideoJob = new NodejsFunction(this, 'CopyVideoJob', {
       runtime: LAMBDA_RUNTIME_NODEJS,
       bundling: bedrockSdkBundling,

@@ -4,7 +4,7 @@ agent:
 auth:
   loading: 加载中...
   login: 登录
-  title: Generative AI Use Cases on AWS
+  title: MWK GenU on AWS
 chat:
   advanced_options: 高级选项
   create_link: 创建链接

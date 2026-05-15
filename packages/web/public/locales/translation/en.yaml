@@ -127,7 +127,7 @@ agent_dashboard: {}
 auth:
   loading: Loading...
   login: Login
-  title: Generative AI Use Cases on AWS
+  title: MWK GenU on AWS
 chat:
   advanced_options: Advanced Options
   create_link: Create Link

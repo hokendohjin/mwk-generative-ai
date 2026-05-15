@@ -34,6 +34,7 @@ export class Auth extends Construct {
       selfSignUpEnabled: props.samlAuthEnabled
         ? false
         : props.selfSignUpEnabled,
+      signInCaseSensitive: false,
       signInAliases: {
         username: false,
         email: true,

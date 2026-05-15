@@ -20,6 +20,7 @@ export class Database extends Construct {
         type: ddb.AttributeType.STRING,
       },
       billingMode: ddb.BillingMode.PAY_PER_REQUEST,
+      stream: ddb.StreamViewType.NEW_AND_OLD_IMAGES,
     });
 
     table.addGlobalSecondaryIndex({
