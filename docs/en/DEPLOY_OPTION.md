@@ -163,7 +163,12 @@ arn:aws:kendra:ap-northeast-1:333333333333:index/77777777-3333-4444-aaaa-1111111
 ### Enabling RAG Chat (Knowledge Base) Use Case
 
 Set `ragKnowledgeBaseEnabled` to `true`. (Default is `false`)  
-If you have an existing Knowledge Base, set `ragKnowledgeBaseId` to the knowledge base ID. (If `null`, an OpenSearch Serverless knowledge base will be created)
+If you have an existing Knowledge Base, set `ragKnowledgeBaseId` to the knowledge base ID. (If `null`, a knowledge base will be created with the backend specified by `ragKnowledgeBaseStorageType`)
+
+Use `ragKnowledgeBaseStorageType` to select the vector store backend. (Default is `opensearch`)
+
+- `opensearch`: Use OpenSearch Serverless (existing behavior)
+- `s3vectors`: Use Amazon S3 Vectors (low cost, no fixed fees)
 
 **Edit [parameter.ts](/packages/cdk/parameter.ts)**
 
@@ -172,6 +177,7 @@ If you have an existing Knowledge Base, set `ragKnowledgeBaseId` to the knowledg
 const envs: Record<string, Partial<StackInput>> = {
   dev: {
     ragKnowledgeBaseEnabled: true,
+    ragKnowledgeBaseStorageType: 'opensearch', // 'opensearch' or 's3vectors'
     ragKnowledgeBaseId: 'XXXXXXXXXX',
     ragKnowledgeBaseStandbyReplicas: false,
     ragKnowledgeBaseAdvancedParsing: false,
@@ -189,6 +195,7 @@ const envs: Record<string, Partial<StackInput>> = {
 {
   "context": {
     "ragKnowledgeBaseEnabled": true,
+    "ragKnowledgeBaseStorageType": "opensearch", // "opensearch" or "s3vectors"
     "ragKnowledgeBaseId": "XXXXXXXXXX",
     "ragKnowledgeBaseStandbyReplicas": false,
     "ragKnowledgeBaseAdvancedParsing": false,
@@ -763,6 +770,13 @@ To add MCP servers, add them to the aforementioned `generic/mcp.json`.
 
 You can use externally created AgentCore Runtimes with `agentCoreExternalRuntimes`.
 
+Each entry supports the following fields:
+
+- `name` (required): Identifier for the runtime. AgentCore Runtime names only allow alphanumeric characters and underscores.
+- `arn` (required): ARN of the AgentCore Runtime.
+- `display_name` (optional): Display name shown in the UI. Useful when you want to show a more descriptive name (including non-ASCII characters such as Japanese) without changing the underlying `name`.
+- `description` (required): Description of the agent. Shown on the agent list page and at the top of the chat page so users can understand the role of each agent at a glance.
+
 When accessing services outside AWS from AgentCore Runtime, use AgentCore Gateway.
 By specifying the Gateway ARN in `agentCoreGatewayArns`, an IAM policy following the principle of least privilege will be configured.
 After configuration, use `mcp-proxy-for-aws` in the MCP settings to specify the endpoint.
@@ -801,6 +815,8 @@ const envs: Record<string, Partial<StackInput>> = {
     agentCoreExternalRuntimes: [
       {
         name: 'AgentCore1',
+        display_name: 'Customer Support Agent',
+        description: 'An agent that responds to customer inquiries.',
         arn: 'arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/agent-core1-xxxxxxxx',
       },
     ],
@@ -823,6 +839,8 @@ const envs: Record<string, Partial<StackInput>> = {
     "agentCoreExternalRuntimes": [
       {
         "name": "AgentCore1",
+        "display_name": "Customer Support Agent",
+        "description": "An agent that responds to customer inquiries.",
         "arn": "arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/agent-core1-xxxxxxxx"
       }
     ]
@@ -968,15 +986,22 @@ As of 2025/03, the multimodal models are:
 "anthropic.claude-3-opus-20240229-v1:0",
 "anthropic.claude-3-sonnet-20240229-v1:0",
 "anthropic.claude-3-haiku-20240307-v1:0",
+"global.anthropic.claude-opus-5",
+"global.anthropic.claude-opus-4-8",
 "global.anthropic.claude-opus-4-7",
 "global.anthropic.claude-opus-4-6-v1",
+"global.anthropic.claude-sonnet-5",
+"global.anthropic.claude-fable-5",
 "global.anthropic.claude-sonnet-4-6",
 "global.anthropic.claude-opus-4-5-20251101-v1:0",
 "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "global.anthropic.claude-haiku-4-5-20251001-v1:0",
 "global.anthropic.claude-sonnet-4-20250514-v1:0",
+"us.anthropic.claude-opus-5",
+"us.anthropic.claude-opus-4-8",
 "us.anthropic.claude-opus-4-7",
 "us.anthropic.claude-opus-4-6-v1",
+"us.anthropic.claude-sonnet-5",
 "us.anthropic.claude-sonnet-4-6",
 "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -988,6 +1013,8 @@ As of 2025/03, the multimodal models are:
 "us.anthropic.claude-3-opus-20240229-v1:0",
 "us.anthropic.claude-3-sonnet-20240229-v1:0",
 "us.anthropic.claude-3-haiku-20240307-v1:0",
+"eu.anthropic.claude-opus-5",
+"eu.anthropic.claude-opus-4-8",
 "eu.anthropic.claude-opus-4-7",
 "eu.anthropic.claude-opus-4-6-v1",
 "eu.anthropic.claude-sonnet-4-6",
@@ -1004,6 +1031,7 @@ As of 2025/03, the multimodal models are:
 "apac.anthropic.claude-3-sonnet-20240229-v1:0",
 "apac.anthropic.claude-3-5-sonnet-20240620-v1:0",
 "apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+"jp.anthropic.claude-opus-4-8",
 "jp.anthropic.claude-opus-4-7",
 "jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -1162,14 +1190,21 @@ This solution supports the following text generation models:
 "anthropic.claude-3-opus-20240229-v1:0",
 "anthropic.claude-3-sonnet-20240229-v1:0",
 "anthropic.claude-3-haiku-20240307-v1:0",
+"global.anthropic.claude-opus-5",
+"global.anthropic.claude-opus-4-8",
 "global.anthropic.claude-opus-4-7",
 "global.anthropic.claude-opus-4-6-v1",
+"global.anthropic.claude-sonnet-5",
+"global.anthropic.claude-fable-5",
 "global.anthropic.claude-sonnet-4-6",
 "global.anthropic.claude-opus-4-5-20251101-v1:0",
 "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "global.anthropic.claude-sonnet-4-20250514-v1:0",
+"us.anthropic.claude-opus-5",
+"us.anthropic.claude-opus-4-8",
 "us.anthropic.claude-opus-4-7",
 "us.anthropic.claude-opus-4-6-v1",
+"us.anthropic.claude-sonnet-5",
 "us.anthropic.claude-sonnet-4-6",
 "us.anthropic.claude-opus-4-1-20250805-v1:0",
 "us.anthropic.claude-opus-4-20250514-v1:0",
@@ -1183,6 +1218,8 @@ This solution supports the following text generation models:
 "us.anthropic.claude-3-haiku-20240307-v1:0",
 "au.anthropic.claude-opus-4-6-v1",
 "au.anthropic.claude-sonnet-4-6",
+"eu.anthropic.claude-opus-5",
+"eu.anthropic.claude-opus-4-8",
 "eu.anthropic.claude-opus-4-7",
 "eu.anthropic.claude-opus-4-6-v1",
 "eu.anthropic.claude-sonnet-4-6",
@@ -1191,6 +1228,7 @@ This solution supports the following text generation models:
 "eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
 "eu.anthropic.claude-3-sonnet-20240229-v1:0",
 "eu.anthropic.claude-3-haiku-20240307-v1:0",
+"jp.anthropic.claude-opus-4-8",
 "jp.anthropic.claude-opus-4-7",
 "apac.anthropic.claude-sonnet-4-20250514-v1:0",
 "apac.anthropic.claude-3-7-sonnet-20250219-v1:0",
