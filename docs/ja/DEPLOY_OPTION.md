@@ -163,7 +163,12 @@ arn:aws:kendra:ap-northeast-1:333333333333:index/77777777-3333-4444-aaaa-1111111
 ### RAG チャット (Knowledge Base) ユースケースの有効化
 
 `ragKnowledgeBaseEnabled` に `true` を指定します。(デフォルトは `false`)  
-作成ずみのKnowledge Baseがある場合、`ragKnowledgeBaseId` にナレッジベースIDを設定します。(`null`の場合、OpenSearch Serverlessのナレッジベースが作成されます)
+作成ずみのKnowledge Baseがある場合、`ragKnowledgeBaseId` にナレッジベースIDを設定します。(`null`の場合、`ragKnowledgeBaseStorageType`で指定されたバックエンドでナレッジベースが作成されます)
+
+`ragKnowledgeBaseStorageType` でベクトルストアのバックエンドを選択できます。(デフォルトは `opensearch`)
+
+- `opensearch`: OpenSearch Serverless を使用（従来動作）
+- `s3vectors`: Amazon S3 Vectors を使用（低コスト、固定費なし）
 
 **[parameter.ts](/packages/cdk/parameter.ts) を編集**
 
@@ -172,6 +177,7 @@ arn:aws:kendra:ap-northeast-1:333333333333:index/77777777-3333-4444-aaaa-1111111
 const envs: Record<string, Partial<StackInput>> = {
   dev: {
     ragKnowledgeBaseEnabled: true,
+    ragKnowledgeBaseStorageType: 'opensearch', // 'opensearch' or 's3vectors'
     ragKnowledgeBaseId: 'XXXXXXXXXX',
     ragKnowledgeBaseStandbyReplicas: false,
     ragKnowledgeBaseAdvancedParsing: false,
@@ -190,6 +196,7 @@ const envs: Record<string, Partial<StackInput>> = {
 {
   "context": {
     "ragKnowledgeBaseEnabled": true,
+    "ragKnowledgeBaseStorageType": "opensearch", // "opensearch" or "s3vectors"
     "ragKnowledgeBaseId": "XXXXXXXXXX",
     "ragKnowledgeBaseStandbyReplicas": false,
     "ragKnowledgeBaseAdvancedParsing": false,
@@ -782,6 +789,13 @@ MCP サーバーを追加する場合は上述の `generic/mcp.json` に追記�
 
 `agentCoreExternalRuntimes` で外部で作成した AgentCore Runtime を利用することが可能です。
 
+各エントリには以下のフィールドを指定できます。
+
+- `name` (必須): ランタイムの識別名。AgentCore Runtime の名称は英数字とアンダースコアのみ利用可能です。
+- `arn` (必須): AgentCore Runtime の ARN。
+- `display_name` (任意): UI 上で表示される名前。`name` を変えずに、日本語などのよりわかりやすい表示名を設定できます。
+- `description` (必須): エージェントの説明文。一覧画面とチャット画面の上部に表示され、ユーザーが各エージェントの役割を一目で把握できるようになります。
+
 AgentCore Runtime から AWS 外部のサービスにアクセスする場合、AgentCore Gateway を使用します。
 `agentCoreGatewayArns` に Gateway の ARN を指定することで、最小権限の原則に従った IAM ポリシーが設定されます。
 設定後、MCP 設定で `mcp-proxy-for-aws` を使用してエンドポイントを指定します。
@@ -820,6 +834,8 @@ const envs: Record<string, Partial<StackInput>> = {
     agentCoreExternalRuntimes: [
       {
         name: 'AgentCore1',
+        display_name: 'カスタマーサポートエージェント',
+        description: '顧客からの問い合わせに対応するエージェントです。',
         arn: 'arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/agent-core1-xxxxxxxx',
       },
     ],
@@ -842,6 +858,8 @@ const envs: Record<string, Partial<StackInput>> = {
     "agentCoreExternalRuntimes": [
       {
         "name": "AgentCore1",
+        "display_name": "カスタマーサポートエージェント",
+        "description": "顧客からの問い合わせに対応するエージェントです。",
         "arn": "arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/agent-core1-xxxxxxxx"
       }
     ]
@@ -987,15 +1005,22 @@ const envs: Record<string, Partial<StackInput>> = {
 "anthropic.claude-3-opus-20240229-v1:0",
 "anthropic.claude-3-sonnet-20240229-v1:0",
 "anthropic.claude-3-haiku-20240307-v1:0",
+"global.anthropic.claude-opus-5",
+"global.anthropic.claude-opus-4-8",
 "global.anthropic.claude-opus-4-7",
 "global.anthropic.claude-opus-4-6-v1",
+"global.anthropic.claude-sonnet-5",
+"global.anthropic.claude-fable-5",
 "global.anthropic.claude-sonnet-4-6",
 "global.anthropic.claude-opus-4-5-20251101-v1:0",
 "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "global.anthropic.claude-haiku-4-5-20251001-v1:0",
 "global.anthropic.claude-sonnet-4-20250514-v1:0",
+"us.anthropic.claude-opus-5",
+"us.anthropic.claude-opus-4-8",
 "us.anthropic.claude-opus-4-7",
 "us.anthropic.claude-opus-4-6-v1",
+"us.anthropic.claude-sonnet-5",
 "us.anthropic.claude-sonnet-4-6",
 "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "us.anthropic.claude-haiku-4-5-20251001-v1:0"
@@ -1007,6 +1032,8 @@ const envs: Record<string, Partial<StackInput>> = {
 "us.anthropic.claude-3-opus-20240229-v1:0",
 "us.anthropic.claude-3-sonnet-20240229-v1:0",
 "us.anthropic.claude-3-haiku-20240307-v1:0",
+"eu.anthropic.claude-opus-5",
+"eu.anthropic.claude-opus-4-8",
 "eu.anthropic.claude-opus-4-7",
 "eu.anthropic.claude-opus-4-6-v1",
 "eu.anthropic.claude-sonnet-4-6",
@@ -1023,6 +1050,7 @@ const envs: Record<string, Partial<StackInput>> = {
 "apac.anthropic.claude-3-sonnet-20240229-v1:0",
 "apac.anthropic.claude-3-5-sonnet-20240620-v1:0",
 "apac.anthropic.claude-3-5-sonnet-20241022-v2:0",
+"jp.anthropic.claude-opus-4-8",
 "jp.anthropic.claude-opus-4-7",
 "jp.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "jp.anthropic.claude-haiku-4-5-20251001-v1:0",
@@ -1181,14 +1209,21 @@ const envs: Record<string, Partial<StackInput>> = {
 "anthropic.claude-3-opus-20240229-v1:0",
 "anthropic.claude-3-sonnet-20240229-v1:0",
 "anthropic.claude-3-haiku-20240307-v1:0",
+"global.anthropic.claude-opus-5",
+"global.anthropic.claude-opus-4-8",
 "global.anthropic.claude-opus-4-7",
 "global.anthropic.claude-opus-4-6-v1",
+"global.anthropic.claude-sonnet-5",
+"global.anthropic.claude-fable-5",
 "global.anthropic.claude-sonnet-4-6",
 "global.anthropic.claude-opus-4-5-20251101-v1:0",
 "global.anthropic.claude-sonnet-4-5-20250929-v1:0",
 "global.anthropic.claude-sonnet-4-20250514-v1:0",
+"us.anthropic.claude-opus-5",
+"us.anthropic.claude-opus-4-8",
 "us.anthropic.claude-opus-4-7",
 "us.anthropic.claude-opus-4-6-v1",
+"us.anthropic.claude-sonnet-5",
 "us.anthropic.claude-sonnet-4-6",
 "us.anthropic.claude-opus-4-1-20250805-v1:0",
 "us.anthropic.claude-opus-4-20250514-v1:0",
@@ -1202,6 +1237,8 @@ const envs: Record<string, Partial<StackInput>> = {
 "us.anthropic.claude-3-haiku-20240307-v1:0",
 "au.anthropic.claude-opus-4-6-v1",
 "au.anthropic.claude-sonnet-4-6",
+"eu.anthropic.claude-opus-5",
+"eu.anthropic.claude-opus-4-8",
 "eu.anthropic.claude-opus-4-7",
 "eu.anthropic.claude-opus-4-6-v1",
 "eu.anthropic.claude-sonnet-4-6",
@@ -1210,6 +1247,7 @@ const envs: Record<string, Partial<StackInput>> = {
 "eu.anthropic.claude-3-5-sonnet-20240620-v1:0",
 "eu.anthropic.claude-3-sonnet-20240229-v1:0",
 "eu.anthropic.claude-3-haiku-20240307-v1:0",
+"jp.anthropic.claude-opus-4-8",
 "jp.anthropic.claude-opus-4-7",
 "apac.anthropic.claude-sonnet-4-20250514-v1:0",
 "apac.anthropic.claude-3-7-sonnet-20250219-v1:0",

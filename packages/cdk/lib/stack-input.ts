@@ -43,14 +43,14 @@ const baseStackInputSchema = z.object({
       ])
     )
     .default([
-      'us.anthropic.claude-sonnet-4-20250514-v1:0',
-      'us.anthropic.claude-opus-4-20250514-v1:0',
-      'us.anthropic.claude-3-7-sonnet-20250219-v1:0',
-      'us.anthropic.claude-3-5-haiku-20241022-v1:0',
-      'us.amazon.nova-premier-v1:0',
-      'us.amazon.nova-pro-v1:0',
-      'us.amazon.nova-lite-v1:0',
-      'us.amazon.nova-micro-v1:0',
+      'global.anthropic.claude-opus-5',
+      'global.anthropic.claude-sonnet-5',
+      'global.anthropic.claude-sonnet-4-6',
+      'global.anthropic.claude-opus-4-8',
+      'global.anthropic.claude-opus-4-7',
+      'global.anthropic.claude-opus-4-6-v1',
+      'global.anthropic.claude-haiku-4-5-20251001-v1:0',
+      'global.amazon.nova-2-lite-v1:0',
       'us.deepseek.r1-v1:0',
     ]),
   imageGenerationModelIds: z
@@ -85,7 +85,7 @@ const baseStackInputSchema = z.object({
         }),
       ])
     )
-    .default(['amazon.nova-sonic-v1:0']),
+    .default(['amazon.nova-2-sonic-v1:0']),
   endpointNames: z
     .array(
       z.union([
@@ -123,6 +123,9 @@ const baseStackInputSchema = z.object({
   // RAG KB
   ragKnowledgeBaseEnabled: z.boolean().default(false),
   ragKnowledgeBaseId: z.string().nullish(),
+  ragKnowledgeBaseStorageType: z
+    .enum(['opensearch', 's3vectors'])
+    .default('opensearch'),
   embeddingModelId: z.string().default('amazon.titan-embed-text-v2:0'),
   ragKnowledgeBaseStandbyReplicas: z.boolean().default(false),
   ragKnowledgeBaseAdvancedParsing: z.boolean().default(false),
@@ -162,6 +165,7 @@ const baseStackInputSchema = z.object({
         name: z.string(),
         arn: z.string(),
         description: z.string().default(''),
+        display_name: z.string().optional(),
       })
     )
     .default([]),
