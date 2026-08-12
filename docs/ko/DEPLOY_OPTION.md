@@ -164,7 +164,12 @@ arn:aws:kendra:ap-northeast-1:333333333333:index/77777777-3333-4444-aaaa-1111111
 ### RAG Chat (Knowledge Base) 사용 사례 활성화
 
 `ragKnowledgeBaseEnabled`를 `true`로 설정합니다. (기본값은 `false`)  
-기존 Knowledge Base가 있는 경우 `ragKnowledgeBaseId`를 지식 베이스 ID로 설정합니다. (`null`인 경우 OpenSearch Serverless 지식 베이스가 생성됩니다)
+기존 Knowledge Base가 있는 경우 `ragKnowledgeBaseId`를 지식 베이스 ID로 설정합니다. (`null`인 경우 `ragKnowledgeBaseStorageType`에서 지정된 백엔드로 지식 베이스가 생성됩니다)
+
+`ragKnowledgeBaseStorageType`로 벡터 스토어 백엔드를 선택할 수 있습니다. (기본값은 `opensearch`)
+
+- `opensearch`: OpenSearch Serverless 사용 (기존 동작)
+- `s3vectors`: Amazon S3 Vectors 사용 (저비용, 고정 비용 없음)
 
 **[parameter.ts](/packages/cdk/parameter.ts) 편집**
 
@@ -173,6 +178,7 @@ arn:aws:kendra:ap-northeast-1:333333333333:index/77777777-3333-4444-aaaa-1111111
 const envs: Record<string, Partial<StackInput>> = {
   dev: {
     ragKnowledgeBaseEnabled: true,
+    ragKnowledgeBaseStorageType: 'opensearch', // 'opensearch' or 's3vectors'
     ragKnowledgeBaseId: 'XXXXXXXXXX',
     ragKnowledgeBaseStandbyReplicas: false,
     ragKnowledgeBaseAdvancedParsing: false,
@@ -190,6 +196,7 @@ const envs: Record<string, Partial<StackInput>> = {
 {
   "context": {
     "ragKnowledgeBaseEnabled": true,
+    "ragKnowledgeBaseStorageType": "opensearch", // "opensearch" or "s3vectors"
     "ragKnowledgeBaseId": "XXXXXXXXXX",
     "ragKnowledgeBaseStandbyReplicas": false,
     "ragKnowledgeBaseAdvancedParsing": false,
@@ -764,6 +771,13 @@ MCP 서버를 추가할 때는 앞서 언급한 `mcp.json`에 추가하세요.
 
 `agentCoreExternalRuntimes`를 사용하면 외부에서 생성된 AgentCore Runtime을 사용할 수 있습니다.
 
+각 항목에는 다음 필드를 지정할 수 있습니다.
+
+- `name` (필수): 런타임의 식별자. AgentCore Runtime의 이름은 영숫자와 언더스코어만 사용할 수 있습니다.
+- `arn` (필수): AgentCore Runtime의 ARN.
+- `display_name` (선택): UI에 표시되는 이름. `name`을 변경하지 않고 한국어 등 더 알기 쉬운 표시명을 설정할 수 있습니다.
+- `description` (필수): 에이전트의 설명. 에이전트 목록 화면과 채팅 화면 상단에 표시되어 사용자가 각 에이전트의 역할을 한눈에 파악할 수 있습니다.
+
 AgentCore 사용 사례를 활성화하려면 `docker` 명령을 실행할 수 있어야 합니다.
 
 > [!WARNING]
@@ -794,6 +808,8 @@ const envs: Record<string, Partial<StackInput>> = {
     agentCoreExternalRuntimes: [
       {
         name: 'AgentCore1',
+        display_name: '고객 지원 에이전트',
+        description: '고객 문의에 응대하는 에이전트입니다.',
         arn: 'arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/agent-core1-xxxxxxxx',
       },
     ],
@@ -813,6 +829,8 @@ const envs: Record<string, Partial<StackInput>> = {
     "agentCoreExternalRuntimes": [
       {
         "name": "AgentCore1",
+        "display_name": "고객 지원 에이전트",
+        "description": "고객 문의에 응대하는 에이전트입니다.",
         "arn": "arn:aws:bedrock-agentcore:us-west-2:<account>:runtime/agent-core1-xxxxxxxx"
       }
     ]
@@ -915,6 +933,7 @@ const envs: Record<string, Partial<StackInput>> = {
 "anthropic.claude-3-opus-20240229-v1:0",
 "anthropic.claude-3-sonnet-20240229-v1:0",
 "anthropic.claude-3-haiku-20240307-v1:0",
+"global.anthropic.claude-opus-5",
 "global.anthropic.claude-sonnet-4-20250514-v1:0",
 "us.anthropic.claude-opus-4-1-20250805-v1:0",
 "us.anthropic.claude-opus-4-20250514-v1:0",
@@ -1081,6 +1100,7 @@ const envs: Record<string, Partial<StackInput>> = {
 "anthropic.claude-3-opus-20240229-v1:0",
 "anthropic.claude-3-sonnet-20240229-v1:0",
 "anthropic.claude-3-haiku-20240307-v1:0",
+"global.anthropic.claude-opus-5",
 "global.anthropic.claude-sonnet-4-20250514-v1:0",
 "us.anthropic.claude-opus-4-1-20250805-v1:0",
 "us.anthropic.claude-opus-4-20250514-v1:0",
