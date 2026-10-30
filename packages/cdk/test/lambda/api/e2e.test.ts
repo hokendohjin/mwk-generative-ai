@@ -174,8 +174,8 @@ describe('API Gateway E2E Tests', () => {
         },
       });
 
-      expect([200, 500]).toContain(res.status);
-      // May fail due to network or parsing issues
+      expect([200, 500, 503]).toContain(res.status);
+      // May fail due to network or parsing issues (503 while temporarily disabled)
     });
   });
 
